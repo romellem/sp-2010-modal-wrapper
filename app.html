@@ -1,0 +1,149 @@
+<!-- Must include jQuery, although it does not need to be from a cdn -->
+<script type="text/javascript" src="https://code.jquery.com/jquery-1.11.3.min.js"></script>
+
+<script type="text/javascript">
+
+var SITE_NAME = '/my/site/';
+var LIST_NAME = 'SampleListName';
+var newSPIDvalue = -1;
+
+function createNewRow() {
+  //Create a new row in the list defined in `LIST_NAME`
+  var spClntCntxt = new SP.ClientContext(SITE_NAME);
+  var spList = spClntCntxt.get_web().get_lists().getByTitle(LIST_NAME);
+  var spListItemCreate = new SP.ListItemCreationInformation();
+  this.spListItem = spList.addItem(spListItemCreate);
+
+  spListItem.update();
+  
+  spClntCntxt.executeQueryAsync(
+    //Success
+    function(sender, args){
+      //After we created our row, get the ID and store it in our newSPIDvalue variable
+      newSPIDvalue = parseInt(spListItem.get_id());
+      
+      //Next, open a modal to "edit" the new slide
+      OpenNewModal(SITE_NAME + 'Lists/' + LIST_NAME + '/EditForm.aspx?ID=' + newSPIDvalue, 'Request a Quote', newSPIDvalue);
+    },
+    //Fail
+    function(sender, args){
+      $(".quote-response").html('<h2>Error in creating new row. You do not have permissions.</h2>');
+      console.log(LIST_NAME + ' row creation failed. ' + args.get_message() + ' -- ' + args.get_stackTrace());
+    }
+  );
+}
+
+
+function OpenNewModal(url, title, rowID) {
+  var modalOptions = SP.UI.$create_DialogOptions();
+  modalOptions.url = url;
+  modalOptions.title = title;
+  modalOptions.allowMaximize = true;
+  modalOptions.showClose = true;
+  // modalOptions.width = 700;
+  modalOptions.x = -1;
+  modalOptions.y = -1;
+  modalOptions.dialogReturnValueCallback = Function.createDelegate(null, 
+    function silentCallbackModalDialog(dialogResult, returnValue) {
+      if (dialogResult === SP.UI.DialogResult.OK) {
+        // User saved some data
+        // Complete any additional post-data save operations here
+        // ... //
+
+        $('.quote-response').html('<h2>Your submission was saved successfully.</h2>');
+        $('#new-row-request .new-row-button').show();
+        $('.sp-loading-spinner').hide();
+      } else {
+        // User canceled out of the modal. 
+        $('.quote-response').html('<h2>Submission has been canceled.</h2>');
+        $('#new-row-request .new-row-button').show();
+        $('.sp-loading-spinner').hide();
+            
+        // If they canceled out of the window, delete the row that was (temporarily) created.
+        this.itemId = rowID;
+
+        var clientContext = new SP.ClientContext(SITE_NAME);
+        var oList = clientContext.get_web().get_lists().getByTitle(LIST_NAME);
+
+        this.oListItem = oList.getItemById(itemId);
+        oListItem.deleteObject();
+
+        clientContext.executeQueryAsync(
+          // Success in deleting row
+          function(sender, args){
+            console.log('Row ' + rowID + ' was removed since modal was canceled.');
+          },
+          // Failure in deleting row
+          function(sender, args){
+            console.log(LIST_NAME + ' row deletion failed. ' + args.get_message() + ' -- ' + args.get_stackTrace());
+          }
+        );
+      }
+    });
+  // Create the SP Modal window
+  return SP.UI.ModalDialog.showModalDialog(modalOptions);
+}
+
+function addRowClickEvent() {
+  $('#new-row-request').show();
+  $('#new-row-request .new-row-button').on('click',function() {
+    $(this).hide();
+    $('#new-row-request .sp-loading-spinner').show();
+    $('.quote-response').html('');
+    createNewRow();
+  });
+}
+
+$( document ).ready(function() {
+  // Load sp.js (required Javascript based CSOM (aka JSOM)), and when finished, activate and show the New Row button.
+  ExecuteOrDelayUntilScriptLoaded(addRowClickEvent, "sp.js");
+});
+</script>
+
+<style type="text/css">
+
+#new-row-request {
+  display: none;
+}
+
+.sp-loading-spinner {
+  display: none;
+}
+
+.new-row-button {
+  display: inline-block;
+  width: auto;
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+  padding: 4px 8px;
+  border-radius: 4px;
+  -webkit-border-radius: 4px;
+  -moz-border-radius: 4px;
+
+  background-color: #4b92db;
+  color: #fff;
+
+  font-size: 1.5em;
+
+  cursor: pointer;
+}
+.new-row-button:hover {
+  background-color: #609fdf;
+}
+.new-row-button:active {
+    background-color: #3685d7;
+}
+
+.quote-response h2 {
+  /* SharePoint might override the h2 element, so mark as !important */
+  color: #a2ad00 !important;
+}
+</style>
+
+<div id="main-container">
+    <div id="new-row-request">
+      <div class="new-row-button">Create new row</div> 
+      <img border="0" src="/_layouts/images/loadingcirclests16.gif" class="sp-loading-spinner"/>
+      <div class="quote-response"></div>
+    </div>
+</div>
